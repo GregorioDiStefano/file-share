@@ -3,13 +3,13 @@ package main
 import (
 	"bytes"
 
+	_ "github.com/GregorioDiStefano/go-file-storage/log"
+	"github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
-
-	"fmt"
 )
 
 func upload(db *DB, gcs *cloudStorageConfig, c *gin.Context) (id, delete_id string) {
-	file, header, err := c.Request.FormFile("upload")
+	file, header, err := c.Request.FormFile("file")
 
 	if err != nil {
 		panic(err)
@@ -29,7 +29,9 @@ func upload(db *DB, gcs *cloudStorageConfig, c *gin.Context) (id, delete_id stri
 
 	id, delete_id = db.addFile(filename, filesize, c.ClientIP())
 
-	fmt.Println(gcs.uploadFile(id, filename, file))
+	if err := gcs.uploadFile(id, filename, file); err != nil {
+		log.WithFields(logrus.Fields{"key": id, "filename": filename}).Error("error upload file")
+	}
 
 	return
 }

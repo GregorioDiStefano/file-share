@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -10,8 +9,9 @@ import (
 
 	"golang.org/x/crypto/scrypt"
 
+	"github.com/Sirupsen/logrus"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/sirupsen/logrus"
+	"github.com/satori/go.uuid"
 )
 
 type DB struct {
@@ -29,8 +29,7 @@ type FileData struct {
 }
 
 const (
-	downloadKeySize = 8
-	deleteKeySize   = 32
+	downloadKeySize = 6
 
 	errorIDNotFound        = "error getting specified file id"
 	errorDeleteFailed      = "error deleting specified file"
@@ -49,7 +48,7 @@ func NewSQL(user, password, ip string) (*DB, error) {
 	return &DB{connection: db}, nil
 }
 
-func (db *DB) addFile(filename string, filesize int64, uploadIP string) (id, delete_id string) {
+func (db *DB) addFile(filename string, filesize int64, uploadIP string) (id, delete_key string) {
 	stmt, err := db.connection.Prepare("INSERT Files SET id=?,delete_id=?,filename=?,filesize=?,upload_ip=?")
 
 	if err != nil {
@@ -57,9 +56,9 @@ func (db *DB) addFile(filename string, filesize int64, uploadIP string) (id, del
 	}
 
 	id = randomString(downloadKeySize)
-	delete_id = randomString(deleteKeySize)
+	delete_key = uuid.NewV4().String()
 
-	_, err = stmt.Exec(id, delete_id, filename, filesize, uploadIP)
+	_, err = stmt.Exec(id, delete_key, filename, filesize, uploadIP)
 
 	if err != nil {
 		panic(err)
@@ -90,16 +89,17 @@ func (db *DB) incDownloadCount(id string) (err error) {
 	return
 }
 
-func (db *DB) deleteFile(id, delete_id string) (err error) {
-	stmt, err := db.connection.Prepare("UPDATE Files SET deleted=true WHERE id=? AND delete_id=?;")
+func (db *DB) addDownloadEntry(id string, ip string) (err error) {
+	stmt, err := db.connection.Prepare("INSERT Downloads SET datetime=?,ip_address=?,file_id=?")
 
 	if err != nil {
-		return
+		panic(err)
 	}
 
-	row, err := stmt.Exec(id, delete_id)
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	res, err := stmt.Exec(timestamp, ip, id)
 
-	if count, err := row.RowsAffected(); count == 0 || err != nil {
+	if count, err := res.RowsAffected(); count == 0 || err != nil {
 		return fmt.Errorf(errorDeleteFailed)
 	}
 
@@ -135,32 +135,16 @@ func (db *DB) createUser(signupData *IncomingSignupRequest) (err error) {
 	return
 }
 
-func (db *DB) loginUser(loginData *IncomingLoginRequest) (err error) {
-	var password_hash, salt string
-	row := db.connection.QueryRow("SELECT password_hash, salt FROM Users WHERE username = ?;", loginData.Username)
-	err = row.Scan(&password_hash, &salt)
+func (db *DB) deleteFile(id, delete_id string) (err error) {
+	stmt, err := db.connection.Prepare("UPDATE Files SET deleted=true WHERE id=? AND delete_id=?;")
 
 	if err != nil {
-		switch {
-		case err == sql.ErrNoRows:
-			log.Warn("Non-existing user.")
-			return fmt.Errorf(errorNonExistingUser)
-		}
 		return
 	}
 
-	passwordHashDecoded, _ := base64.RawStdEncoding.DecodeString(password_hash)
-	saltDecoded, _ := base64.RawStdEncoding.DecodeString(salt)
-
-	actualHash, err := scrypt.Key([]byte(loginData.Password), saltDecoded, 16384, 256, 2, 32)
-
-	if err != nil {
-		log.Warn("failed generating key for user: ", err.Error())
-		return
-	}
-
-	if !bytes.Equal(actualHash, passwordHashDecoded) {
-		return fmt.Errorf(errorPasswordIncorrect)
+	row, err := stmt.Exec(id, delete_id)
+	if count, err := row.RowsAffected(); count == 0 || err != nil {
+		return fmt.Errorf(errorDeleteFailed)
 	}
 
 	return

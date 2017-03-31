@@ -4,10 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	jwt_lib "github.com/dgrijalva/jwt-go"
-	"github.com/gin-gonic/contrib/jwt"
+	"github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
 var log = logrus.New()
@@ -41,6 +39,13 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
+	go func() {
+		for {
+			time.Sleep(60 * 24)
+		}
+
+	}()
+
 	setupRoutes(sqlConnection, cloudStorage, config)
 }
 
@@ -52,49 +57,53 @@ func setupRoutes(db *DB, gcs *cloudStorageConfig, c *config) {
 		context.JSON(http.StatusCreated, map[string]string{"id": id, "delete_id": deleteID})
 	})
 
-	g.POST("/account/signup", func(context *gin.Context) {
-		registrationReq := new(IncomingSignupRequest)
-		context.BindJSON(&registrationReq)
+	/*
+		g.POST("/account/signup", func(context *gin.Context) {
+			registrationReq := new(IncomingSignupRequest)
+			context.BindJSON(&registrationReq)
 
-		if err := registrationReq.validate(); err != nil {
-			context.JSON(http.StatusInternalServerError, err.Error())
-			return
-		}
+			if err := registrationReq.validate(); err != nil {
+				context.JSON(http.StatusInternalServerError, err.Error())
+				return
+			}
 
-		db.createUser(registrationReq)
-	})
+			db.createUser(registrationReq)
+		})
 
-	private := g.Group("/user")
-	private.Use(jwt.Auth(c.appSecret)).GET("/files", func(context *gin.Context) {
-		context.JSON(200, "abc")
-	})
+		private := g.Group("/user")
+		private.Use(jwt.Auth(c.appSecret)).GET("/files", func(context *gin.Context) {
+			context.JSON(200, "abc")
+		})
 
-	g.POST("/account/login", func(context *gin.Context) {
-		loginReq := new(IncomingLoginRequest)
-		context.BindJSON(&loginReq)
 
-		if err := db.loginUser(loginReq); err != nil {
-			context.JSON(http.StatusNetworkAuthenticationRequired, "unable to authenticate")
-			return
-		}
+			g.POST("/account/login", func(context *gin.Context) {
+				loginReq := new(IncomingLoginRequest)
+				context.BindJSON(&loginReq)
 
-		token := jwt_lib.New(jwt_lib.GetSigningMethod("HS256"))
+				if err := db.loginUser(loginReq); err != nil {
+					context.JSON(http.StatusNetworkAuthenticationRequired, "unable to authenticate")
+					return
+				}
 
-		token.Claims = jwt_lib.MapClaims{
-			"id":  loginReq.Username,
-			"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
-		}
+				token := jwt_lib.New(jwt_lib.GetSigningMethod("HS256"))
 
-		tokenString, err := token.SignedString([]byte(c.appSecret))
-		if err != nil {
-			context.JSON(500, gin.H{"message": "Could not generate token"})
-		}
+				token.Claims = jwt_lib.MapClaims{
+					"id":  loginReq.Username,
+					"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
+				}
 
-		context.SetCookie("jwt", tokenString, 60, "*", "localhost", true, true)
-	})
+				tokenString, err := token.SignedString([]byte(c.appSecret))
+				if err != nil {
+					context.JSON(500, gin.H{"message": "Could not generate token"})
+				}
 
-	g.GET("/x/:id", func(context *gin.Context) {
+				context.SetCookie("jwt", tokenString, 60, "*", "localhost", true, true)
+			})
+	*/
+
+	g.GET("/:id", func(context *gin.Context) {
 		id := context.Param("id")
+		ip := context.ClientIP()
 		fd, err := db.getFile(id)
 
 		if err != nil {
@@ -120,6 +129,8 @@ func setupRoutes(db *DB, gcs *cloudStorageConfig, c *config) {
 		}
 
 		go db.incDownloadCount(id) // no need to wait
+		go db.addDownloadEntry(id, ip)
+
 		context.Redirect(http.StatusTemporaryRedirect, url)
 	})
 

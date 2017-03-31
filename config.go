@@ -1,6 +1,8 @@
 package main
 
-import "github.com/spf13/viper"
+import (
+	"github.com/spf13/viper"
+)
 
 type config struct {
 	googleCloudProjectName string
@@ -14,6 +16,8 @@ type config struct {
 	appMaxDownloadsBeforeCaptcha int
 	appMaxUploadSize             int
 	appSecret                    string
+
+	fileTTL int
 }
 
 func readConfigFile() (c *config, err error) {
@@ -38,7 +42,7 @@ func readConfigFile() (c *config, err error) {
 
 	c.appMaxUploadSize = viper.GetInt("max_upload_size")
 	c.appMaxDownloadsBeforeCaptcha = viper.GetInt("max_unverified_downloads")
-	c.appSecret = viper.GetString("secret")
+	c.fileTTL = viper.GetInt("file_ttl")
 
 	return
 }
