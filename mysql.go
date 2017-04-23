@@ -19,12 +19,11 @@ type DB struct {
 }
 
 type FileData struct {
-	key      string
-	filename string
-	filesize int64
-
-	deleted bool
-
+	key       string
+	filename  string
+	filesize  int64
+	uploaded  string
+	deleted   bool
 	downloads int
 }
 
@@ -71,17 +70,18 @@ func (db *DB) getFile(id string) (fdata *FileData, err error) {
 	var filename string
 	var downloads int
 	var deleted bool
+	var uploaded string
 
-	row := db.connection.QueryRow("SELECT filename, downloads, deleted FROM Files WHERE id = ?;", id)
-	err = row.Scan(&filename, &downloads, &deleted)
+	row := db.connection.QueryRow("SELECT filename, downloads, deleted, uploaded FROM Files WHERE id = ?;", id)
+	err = row.Scan(&filename, &downloads, &deleted, &uploaded)
 
 	if err != nil {
 		log.WithField("id", id).Warn("not able to load id: ", err)
 		return nil, fmt.Errorf(errorIDNotFound)
 	}
 
-	log.WithFields(logrus.Fields{"key": id, "filename": filename, "downloads": downloads, "deleted": deleted}).Debug("file exists")
-	return &FileData{filename: filename, key: id, downloads: downloads, deleted: deleted}, nil
+	log.WithFields(logrus.Fields{"key": id, "filename": filename, "downloads": downloads, "deleted": deleted, "uploaded": uploaded}).Debug("file exists")
+	return &FileData{filename: filename, key: id, downloads: downloads, deleted: deleted, uploaded: uploaded}, nil
 }
 
 func (db *DB) incDownloadCount(id string) (err error) {

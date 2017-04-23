@@ -1,11 +1,10 @@
 package main
 
 import (
-	"net/http"
-	"time"
-
 	"github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/gin"
+	"net/http"
+	"time"
 )
 
 var log = logrus.New()
@@ -119,6 +118,15 @@ func setupRoutes(db *DB, gcs *cloudStorageConfig, c *config) {
 		if fd.downloads > c.appMaxDownloadsBeforeCaptcha {
 			context.JSON(http.StatusForbidden, "this file has been downloaded too many times")
 			return
+		}
+
+		if t, err := time.Parse("2006-01-02 15:04:05", fd.uploaded); err == nil {
+			if t.Unix()+int64(c.fileTTL) < time.Now().UTC().Unix() {
+				context.JSON(http.StatusForbidden, "this file has expired")
+				return
+			}
+		} else {
+			log.Warn("unable to verify upload datetime: %s", err)
 		}
 
 		url, err := gcs.getSignedURL(fd.key, fd.filename)
