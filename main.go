@@ -56,50 +56,6 @@ func setupRoutes(db *DB, gcs *cloudStorageConfig, c *config) {
 		context.JSON(http.StatusCreated, map[string]string{"id": id, "delete_id": deleteID})
 	})
 
-	/*
-		g.POST("/account/signup", func(context *gin.Context) {
-			registrationReq := new(IncomingSignupRequest)
-			context.BindJSON(&registrationReq)
-
-			if err := registrationReq.validate(); err != nil {
-				context.JSON(http.StatusInternalServerError, err.Error())
-				return
-			}
-
-			db.createUser(registrationReq)
-		})
-
-		private := g.Group("/user")
-		private.Use(jwt.Auth(c.appSecret)).GET("/files", func(context *gin.Context) {
-			context.JSON(200, "abc")
-		})
-
-
-			g.POST("/account/login", func(context *gin.Context) {
-				loginReq := new(IncomingLoginRequest)
-				context.BindJSON(&loginReq)
-
-				if err := db.loginUser(loginReq); err != nil {
-					context.JSON(http.StatusNetworkAuthenticationRequired, "unable to authenticate")
-					return
-				}
-
-				token := jwt_lib.New(jwt_lib.GetSigningMethod("HS256"))
-
-				token.Claims = jwt_lib.MapClaims{
-					"id":  loginReq.Username,
-					"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
-				}
-
-				tokenString, err := token.SignedString([]byte(c.appSecret))
-				if err != nil {
-					context.JSON(500, gin.H{"message": "Could not generate token"})
-				}
-
-				context.SetCookie("jwt", tokenString, 60, "*", "localhost", true, true)
-			})
-	*/
-
 	g.GET("/:id", func(context *gin.Context) {
 		id := context.Param("id")
 		ip := context.ClientIP()
